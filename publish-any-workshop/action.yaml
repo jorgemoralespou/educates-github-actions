@@ -46,7 +46,6 @@ runs:
         echo "GITHUB_TOKEN=${{inputs.token}}" >>${GITHUB_ENV}
 
     - name: Publish workshop content as OCI image and create workshop definition
-      if: inputs.multiple-workshops == 'false'
       shell: bash
       run : |
         if [ "${{inputs.multiple-workshops}}" = "false" ]; then
