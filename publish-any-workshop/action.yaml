@@ -1,0 +1,130 @@
+name: Workshop Publisher
+description: Publish a single Educates workshop to GitHub Container Registry.
+
+inputs:
+  token:
+    description: "GitHub access token."
+    required: true
+  path:
+    description: "Relative directory path under $GITHUB_WORKSPACE to workshop files."
+    required: false
+    default: '.'
+  multiple-workshops:
+    description: "If true, publish all workshop files in the workshop directory."
+    required: false
+    default: 'false'
+  workshop-resource-file:
+    description: "Relative path under workshop directory to the Workshop resource file."
+    required: false
+    default: 'resources/workshop.yaml'
+  trainingportal-resource-file:
+    description: "Relative path under workshop directory to the TrainingPortal resource file."
+    required: false
+    default: 'resources/trainingportal.yaml'
+
+runs:
+  using: composite
+
+  steps:
+    - name: Install Carvel tools
+      shell: bash
+      run: curl -L https://carvel.dev/install.sh | bash
+
+    - name: Install Educates CLI
+      shell: bash
+      run: |
+        imgpkg pull -i ghcr.io/educates/educates-client-programs:3.2.2 -o /tmp/client-programs
+        mv /tmp/client-programs/educates-linux-amd64 /usr/local/bin/educates
+
+    - name: Calculate release variables
+      shell: bash
+      run: |
+        REPOSITORY_NAME=${{github.event.repository.name}}
+        echo "REPOSITORY_NAME=${REPOSITORY_NAME,,}" >>${GITHUB_ENV}
+        echo "REPOSITORY_OWNER=${GITHUB_REPOSITORY_OWNER,,}" >>${GITHUB_ENV}
+        echo "REPOSITORY_TAG=${GITHUB_REF##*/}" >>${GITHUB_ENV}
+        echo "GITHUB_TOKEN=${{inputs.token}}" >>${GITHUB_ENV}
+
+    - name: Publish workshop content as OCI image and create workshop definition
+      if: inputs.multiple-workshops == 'false'
+      shell: bash
+      run : |
+        if [ "${{inputs.multiple-workshops}}" = "false" ]; then
+          mkdir -p ${{runner.temp}}/workshops/${REPOSITORY_NAME}/resources
+          educates publish-workshop '${{inputs.path}}' \
+            --workshop-file '${{inputs.workshop-resource-file}}' \
+            --export-workshop ${{runner.temp}}/workshops/resources/workshop.yaml \
+            --image-repository=ghcr.io/${REPOSITORY_OWNER} \
+            --workshop-version=${REPOSITORY_TAG} \
+            --registry-username=${{github.actor}} \
+            --registry-password=${{env.GITHUB_TOKEN}}
+        else
+          for WORKSHOP_NAME in `ls workshops`; do
+            mkdir -p ${{runner.temp}}/workshops/${WORKSHOP_NAME}/resources
+            educates publish-workshop workshops/${WORKSHOP_NAME} \
+              --export-workshop ${{runner.temp}}/workshops/resources/${WORKSHOP_NAME}.yaml \
+              --image-repository=ghcr.io/${REPOSITORY_OWNER} \
+              --workshop-version=${REPOSITORY_TAG} \
+              --registry-username=${{github.actor}} \
+              --registry-password=${{env.GITHUB_TOKEN}}
+          done
+        fi
+
+    - name: Generate archives containing the workshop definition
+      shell: bash
+      run: |
+        if [ "${{inputs.multiple-workshops}}" = "false" ]; then
+          ytt -f ${{runner.temp}}/workshops > ${{runner.temp}}/workshops.yaml
+        fi
+        (cd ${{runner.temp}}; tar cvfz workshops.tar.gz workshops)
+        (cd ${{runner.temp}}; zip workshops.zip -r workshops)
+
+    - uses: actions/upload-artifact@v4
+      if: inputs.multiple-workshops == 'false'
+      with:
+        name: workshop.yaml
+        path: ${{runner.temp}}/workshops/resources/workshop.yaml
+
+    - uses: actions/upload-artifact@v4
+      if: inputs.multiple-workshops == 'true'
+      with:
+        name: workshops.yaml
+        path: ${{runner.temp}}/workshops.yaml
+
+    # When multiple workshops are published, we need to upload every workshop definition 
+    # with the workshop path as name
+    - uses: actions/upload-artifact@v4
+      if: inputs.multiple-workshops == 'true'
+      with:
+        name: workshops
+        path: ${{runner.temp}}/workshops/${{env.REPOSITORY_NAME}}/resources/*.yaml
+
+    - uses: actions/upload-artifact@v4
+      with:
+        name: workshops.tar.gz
+        path: ${{runner.temp}}/workshops.tar.gz
+
+    - uses: actions/upload-artifact@v4
+      with:
+        name: workshops.zip
+        path: ${{runner.temp}}/workshops.zip
+
+    - name: Create the GitHub release for the workshop
+      id: create_release
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v2
+      env:
+        GITHUB_TOKEN: ${{env.GITHUB_TOKEN}}
+      with:
+        tag_name: ${{env.REPOSITORY_TAG}}
+        name: "${{env.REPOSITORY_NAME}}:${{env.REPOSITORY_TAG}}"
+        draft: false
+        prerelease: false
+        fail_on_unmatched_files: false
+        files: |
+          ${{runner.temp}}/workshops.tar.gz
+          ${{runner.temp}}/workshops.zip
+          ${{runner.temp}}/workshop.yaml
+          ${{runner.temp}}/workshops.yaml
+          ${{inputs.path}}/${{inputs.trainingportal-resource-file}}
+          ${{runner.temp}}/workshops/${{env.REPOSITORY_NAME}}/resources/*.yaml
