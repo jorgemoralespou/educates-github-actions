@@ -59,7 +59,7 @@ runs:
             --registry-password=${{env.GITHUB_TOKEN}}
         else
           for WORKSHOP_NAME in `ls workshops`; do
-            mkdir -p ${{runner.temp}}/workshops/${WORKSHOP_NAME}/resources
+            mkdir -p ${{runner.temp}}/workshops/resources
             educates publish-workshop workshops/${WORKSHOP_NAME} \
               --export-workshop ${{runner.temp}}/workshops/resources/${WORKSHOP_NAME}.yaml \
               --image-repository=ghcr.io/${REPOSITORY_OWNER} \
