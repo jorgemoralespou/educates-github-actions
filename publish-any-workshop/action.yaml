@@ -73,7 +73,7 @@ runs:
     - name: Generate archives containing the workshop definition
       shell: bash
       run: |
-        if [ "${{inputs.multiple-workshops}}" = "false" ]; then
+        if [ "${{inputs.multiple-workshops}}" = "true" ]; then
           ytt -f ${{runner.temp}}/workshops > ${{runner.temp}}/workshops.yaml
         fi
         (cd ${{runner.temp}}; tar cvfz workshops.tar.gz workshops)
