@@ -74,7 +74,7 @@ runs:
     - uses: actions/upload-artifact@v4
       with:
         name: workshops
-        path: ${{runner.temp}}/workshops/${{env.REPOSITORY_NAME}}/resources/*.yaml
+        path: ${{runner.temp}}/workshops/resources/*.yaml
 
     - uses: actions/upload-artifact@v4
       with:

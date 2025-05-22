@@ -96,7 +96,7 @@ runs:
       if: inputs.multiple-workshops == 'true'
       with:
         name: workshops
-        path: ${{runner.temp}}/workshops/${{env.REPOSITORY_NAME}}/resources/*.yaml
+        path: ${{runner.temp}}/workshops/resources/*.yaml
 
     - uses: actions/upload-artifact@v4
       with:
@@ -126,4 +126,4 @@ runs:
           ${{runner.temp}}/workshop.yaml
           ${{runner.temp}}/workshops.yaml
           ${{inputs.path}}/${{inputs.trainingportal-resource-file}}
-          ${{runner.temp}}/workshops/${{env.REPOSITORY_NAME}}/resources/*.yaml
+          ${{runner.temp}}/workshops/resources/*.yaml
