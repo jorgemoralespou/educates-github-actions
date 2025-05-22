@@ -49,7 +49,7 @@ runs:
       shell: bash
       run : |
         for WORKSHOP_NAME in `ls ${{inputs.workshops-dir}}`; do
-          mkdir -p ${{runner.temp}}/workshops/${WORKSHOP_NAME}/resources
+          mkdir -p ${{runner.temp}}/workshops/resources
           educates publish-workshop ${${inputs.workshops-dir}/${WORKSHOP_NAME} \
             --export-workshop ${{runner.temp}}/workshops/resources/${WORKSHOP_NAME}.yaml \
             --workshop-file=${{inputs.workshop-resources-file}} \
@@ -104,4 +104,4 @@ runs:
           ${{runner.temp}}/workshop.yaml
           ${{runner.temp}}/workshops.yaml
           ${{inputs.path}}/${{inputs.trainingportal-resource-file}}
-          ${{runner.temp}}/workshops/${{env.REPOSITORY_NAME}}/resources/*.yaml
+          ${{runner.temp}}/workshops/resources/*.yaml
