@@ -61,6 +61,7 @@ runs:
             --registry-password=${{env.GITHUB_TOKEN}}
         else
           for WORKSHOP_NAME in `ls ${{inputs.path}}`; do
+            echo "Publishing workshop: ${WORKSHOP_NAME}"
             educates publish-workshop '${{inputs.path}}/${WORKSHOP_NAME}' \
               --export-workshop ${{env.WORKSHOPS_DEST_PATH}}/${WORKSHOP_NAME}.yaml \
               --image-repository=ghcr.io/${REPOSITORY_OWNER} \
