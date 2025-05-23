@@ -6,7 +6,7 @@ inputs:
     description: "GitHub access token."
     required: true
   path:
-    description: "Relative directory path under $GITHUB_WORKSPACE to workshop files."
+    description: "Relative directory path under $GITHUB_WORKSPACE to workshop files or collection of workshops. (., ./workshops)"
     required: false
     default: '.'
   multiple-workshops:
@@ -33,7 +33,7 @@ runs:
     - name: Install Educates CLI
       shell: bash
       run: |
-        imgpkg pull -i ghcr.io/educates/educates-client-programs:3.2.2 -o /tmp/client-programs
+        imgpkg pull -i ghcr.io/educates/educates-client-programs:3.3.2 -o /tmp/client-programs
         mv /tmp/client-programs/educates-linux-amd64 /usr/local/bin/educates
 
     - name: Calculate release variables
@@ -44,24 +44,26 @@ runs:
         echo "REPOSITORY_OWNER=${GITHUB_REPOSITORY_OWNER,,}" >>${GITHUB_ENV}
         echo "REPOSITORY_TAG=${GITHUB_REF##*/}" >>${GITHUB_ENV}
         echo "GITHUB_TOKEN=${{inputs.token}}" >>${GITHUB_ENV}
+        echo "WORKSHOPS_PATH=${{runner.temp}}/workshops/resources" >>${GITHUB_ENV}
 
     - name: Publish workshop content as OCI image and create workshop definition
       shell: bash
       run : |
+        mkdir -p ${{env.WORKSHOPS_PATH}}
+        # TODO: Verify this
         if [ "${{inputs.multiple-workshops}}" = "false" ]; then
-          mkdir -p ${{runner.temp}}/workshops/${REPOSITORY_NAME}/resources
           educates publish-workshop '${{inputs.path}}' \
             --workshop-file '${{inputs.workshop-resource-file}}' \
-            --export-workshop ${{runner.temp}}/workshops/resources/workshop.yaml \
+            --export-workshop ${{env.WORKSHOPS_PATH}}/workshop.yaml \
             --image-repository=ghcr.io/${REPOSITORY_OWNER} \
             --workshop-version=${REPOSITORY_TAG} \
             --registry-username=${{github.actor}} \
             --registry-password=${{env.GITHUB_TOKEN}}
         else
           for WORKSHOP_NAME in `ls workshops`; do
-            mkdir -p ${{runner.temp}}/workshops/resources
-            educates publish-workshop workshops/${WORKSHOP_NAME} \
-              --export-workshop ${{runner.temp}}/workshops/resources/${WORKSHOP_NAME}.yaml \
+            educates publish-workshop '${{inputs.path}}/${WORKSHOP_NAME}' \
+              --workshop-file '${{inputs.workshop-resource-file}}' \
+              --export-workshop ${{env.WORKSHOPS_PATH}}/${WORKSHOP_NAME}.yaml \
               --image-repository=ghcr.io/${REPOSITORY_OWNER} \
               --workshop-version=${REPOSITORY_TAG} \
               --registry-username=${{github.actor}} \
@@ -72,20 +74,11 @@ runs:
     - name: Generate archives containing the workshop definition
       shell: bash
       run: |
-        if [ "${{inputs.multiple-workshops}}" = "true" ]; then
-          ytt -f ${{runner.temp}}/workshops > ${{runner.temp}}/workshops.yaml
-        fi
-        (cd ${{runner.temp}}; tar cvfz workshops.tar.gz workshops)
-        (cd ${{runner.temp}}; zip workshops.zip -r workshops)
+        ytt -f ${{env.WORKSHOPS_PATH}} > ${{runner.temp}}/workshops.yaml
+        (cd ${{runner.temp}}; tar cvfz workshops.tar.gz ${{env.WORKSHOPS_PATH}})
+        (cd ${{runner.temp}}; zip workshops.zip -r ${{env.WORKSHOPS_PATH}})
 
     - uses: actions/upload-artifact@v4
-      if: inputs.multiple-workshops == 'false'
-      with:
-        name: workshop.yaml
-        path: ${{runner.temp}}/workshops/resources/workshop.yaml
-
-    - uses: actions/upload-artifact@v4
-      if: inputs.multiple-workshops == 'true'
       with:
         name: workshops.yaml
         path: ${{runner.temp}}/workshops.yaml
@@ -96,7 +89,7 @@ runs:
       if: inputs.multiple-workshops == 'true'
       with:
         name: workshops
-        path: ${{runner.temp}}/workshops/resources/*.yaml
+        path: ${{env.WORKSHOPS_PATH}}/*.yaml
 
     - uses: actions/upload-artifact@v4
       with:
@@ -126,4 +119,4 @@ runs:
           ${{runner.temp}}/workshop.yaml
           ${{runner.temp}}/workshops.yaml
           ${{inputs.path}}/${{inputs.trainingportal-resource-file}}
-          ${{runner.temp}}/workshops/resources/*.yaml
+          ${{env.WORKSHOPS_PATH}}/*.yaml
